@@ -1,91 +1,147 @@
-That’s a **good sign**. It means:
+You’re not crazy — the UI you’re describing is **not** the “LangChain-style Basic LLM Chain with Memory.” It’s the newer n8n **AI prompt/chain wrapper** that **doesn’t expose memory settings** in that node.
 
-✅ Postman successfully hit your webhook
-✅ Your workflow started running
-❌ n8n couldn’t send a response back because you **didn’t add the “Respond to Webhook” node yet** (or it’s not connected)
+So the answer is simple:
 
-So this is a **configuration gap**, not a failure.
+✅ **Keep using your 3 nodes**, but you must add **memory as a separate node** (or a built-in “chat memory” node if your n8n has one).
+n8n will not magically keep a conversation alive unless **you persist the history somewhere**.
 
----
-
-# Fix in 60 seconds
-
-## Step 1 — Confirm your Webhook node setting
-
-Open **Webhook node** → set:
-
-**Response:** ✅ `Using Respond to Webhook node`
-
-(You already did this earlier, but re-check it.)
+You have two practical choices:
 
 ---
 
-## Step 2 — Add the missing node
+# Option 1 (Best & simple): Add ONE node = a Function “Session Memory” node
 
-1. Click **➕ Add node**
-2. Search: **Respond to Webhook**
-3. Add it at the **end** of your current chain
-4. Connect it:
+This turns your 3-node flow into a 4-node flow. That’s the minimum.
 
-**Webhook → Function → Respond to Webhook**
+### New flow
 
-(If you have only Webhook + Function right now, that’s fine.)
+**Chat Trigger → Function (Memory) → Basic LLM Chain → Respond to Chat**
+
+### Why you need this
+
+Because your Basic LLM Chain only uses the *current* message.
+It has no memory feature in your UI, so we store memory ourselves.
 
 ---
 
-## Step 3 — Configure “Respond to Webhook” node
+## Step-by-step (exact)
 
-Open it and set:
+### 1) Add a **Function** node between Chat Trigger and Basic LLM Chain
 
-* **Response Body:** JSON
+Settings:
 
-Paste this:
+* **Mode:** Run once for each item
+* **Language:** JavaScript
 
-```json
-{
-  "ok": true,
-  "echo": "{{$json.user_message || $json.message || 'no message found'}}",
-  "session_id": "{{$json.session_id || 'default'}}"
-}
+Paste this code:
+
+```javascript
+const staticData = this.getWorkflowStaticData('global');
+
+// 1) Read inputs from Chat Trigger
+const sessionId =
+  $json.session_id ||
+  $json.chatId ||
+  $json.conversationId ||
+  $json.userId ||
+  'default';
+
+const userMessage =
+  $json.message ||
+  $json.text ||
+  $json.userMessage ||
+  '';
+
+// 2) Initialize memory store
+if (!staticData.chatMemory) staticData.chatMemory = {};
+if (!staticData.chatMemory[sessionId]) staticData.chatMemory[sessionId] = [];
+
+// 3) Append user message
+staticData.chatMemory[sessionId].push({ role: 'user', content: userMessage });
+
+// 4) Keep last N messages (tune later)
+staticData.chatMemory[sessionId] = staticData.chatMemory[sessionId].slice(-12);
+
+// 5) Build prompt text that includes history
+const historyText = staticData.chatMemory[sessionId]
+  .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+  .join('\n');
+
+return [{
+  session_id: sessionId,
+  user_message: userMessage,
+  chat_history: staticData.chatMemory[sessionId],
+  prompt_for_llm: `You are a corporate finance assistant.
+Use the conversation history to answer the latest question.
+If information is missing, ask a clarifying question.
+
+Conversation history:
+${historyText}
+
+Latest user message:
+${userMessage}
+`
+}];
 ```
 
-If you don’t see `user_message` yet, that’s okay — this is just a test response.
+### 2) Update **Basic LLM Chain** prompt source
+
+In your Basic LLM Chain:
+
+* **Source for prompt:** choose **Defined below**
+* In the prompt box, use this expression:
+
+`{{$json.prompt_for_llm}}`
+
+(So the chain uses the history-aware prompt we generated.)
+
+### 3) Add ONE more small step to store the assistant reply (optional but recommended)
+
+If you want the assistant’s replies also in memory, you need to append them after the chain.
+That means either:
+
+* add another Function node after Basic LLM Chain, OR
+* store it in Respond node (not ideal)
+
+If you truly want to keep nodes minimal, skip it for now — memory will be “user-only,” which is still useful.
+
+But best practice is one more Function node after the chain.
 
 ---
 
-## Step 4 — Test again in Postman
+# Option 2: Use “Chat Model” node directly
 
-Use the same request:
+This changes nothing regarding memory. It will still only reply once per request.
+**Chat Model ≠ conversation loop.** It’s just the model call.
 
-```json
-{
-  "message": "Hello from Postman",
-  "session_id": "test-session-1"
-}
-```
-
-Now Postman should return **200** with a JSON response.
+So: switching to Chat Model won’t solve your issue. You still need memory storage.
 
 ---
 
-# Why Postman showed “code 0”
+# Key point you must accept
 
-In Postman, **code 0** commonly happens when the client doesn’t get a proper HTTP response (timeout / connection closed / workflow didn’t respond). In your case, n8n explicitly said why:
+n8n chat is always:
+**message → run → reply → end**
 
-> **No Respond to Webhook node found**
+“Keep going until solved” is achieved by:
 
-So once you add it, Postman will behave normally.
+* persistent memory per `sessionId`
+* and the assistant ending with a question like:
+  **“What’s the timeframe/report name?”**
 
----
-
-# After this works (next step)
-
-Once Postman gets a clean JSON response, we insert the Vertex AI call **between** Function and Respond:
-
-**Webhook → Function (memory) → HTTP Request (Vertex AI) → Function (extract reply) → Respond**
+Not by looping the workflow.
 
 ---
 
-## Do this now and tell me one thing:
+# What I need from you (so this works first try)
 
-After adding **Respond to Webhook**, what status code do you get in Postman — **200** or something else?
+In the Chat Trigger output (right panel), what are the field names you see for:
+
+* the user’s message: `message` or `text`?
+* the session id: `chatId` or `conversationId`?
+
+Just tell me the two keys, like:
+
+* “message key = text, session key = chatId”
+
+Then I’ll adjust the memory function to match your exact payload so you don’t waste time.
