@@ -1,152 +1,170 @@
-Okay, I'm not seeing what you are telling me to look into the basic LLM chain 1. So, what type of node we have to use over here? Tell me. I thought we are going to use the basic LLM chain node. What else can we use over here? I was thinking about using chat model directly, but it looks like the basic one will work over here, isn't it? Or do we have some other type of node? Because the specifications like you are telling me to turn on the memory, set the session key or something, I don't see all these information over here. So, from what I see over here, there are two tabs, parameters and settings. In the parameters, I'm seeing the first one is called source for prompt. In brackets, user message. It has three drop-downs, connected chat trigger node, connected guardrail node, defined below. And then, you know, there is specification given inside for the prompt. Then, there is an option called, like a toggle button called require specific output format. Then, there is another toggle button called enable fallback model. And then, we have a chat message if using a chat model. It has three options, AI, system and user. So, I have currently selected system. And I have the prompt set up as you are a corporate finance assistant. Answer clearly, concisely and practically. Use prior conversation as the context. Then, there is more option to add more prompts, but I have added only one of them. Then, at the end, we have batch processing. In that, we have batch size and delay between batches. That's all we have. I'll move to settings tab. It has always output data toggle. Then, we have execute once. That's turned off. Retry on fail. Turned off on error. There's like three drop-downs. Stop workflow. Continue using error output. Display note in flow and there's notes inside. So, I mean, I want to understand what else we can do over here. On the right-hand side, I do see the chat information with the logs. But, okay, you got to know what we have right now.
-
-
-
-
-You’re not crazy — the UI you’re describing is **not** the “LangChain-style Basic LLM Chain with Memory.” It’s the newer n8n **AI prompt/chain wrapper** that **doesn’t expose memory settings** in that node.
-
-So the answer is simple:
-
-✅ **Keep using your 3 nodes**, but you must add **memory as a separate node** (or a built-in “chat memory” node if your n8n has one).
-n8n will not magically keep a conversation alive unless **you persist the history somewhere**.
-
-You have two practical choices:
-
----
-
-# Option 1 (Best & simple): Add ONE node = a Function “Session Memory” node
-
-This turns your 3-node flow into a 4-node flow. That’s the minimum.
-
-### New flow
-
-**Chat Trigger → Function (Memory) → Basic LLM Chain → Respond to Chat**
-
-### Why you need this
-
-Because your Basic LLM Chain only uses the *current* message.
-It has no memory feature in your UI, so we store memory ourselves.
-
----
-
-## Step-by-step (exact)
-
-### 1) Add a **Function** node between Chat Trigger and Basic LLM Chain
-
-Settings:
-
-* **Mode:** Run once for each item
-* **Language:** JavaScript
-
-Paste this code:
-
-```javascript
-const staticData = this.getWorkflowStaticData('global');
-
-// 1) Read inputs from Chat Trigger
-const sessionId =
-  $json.session_id ||
-  $json.chatId ||
-  $json.conversationId ||
-  $json.userId ||
-  'default';
-
-const userMessage =
-  $json.message ||
-  $json.text ||
-  $json.userMessage ||
-  '';
-
-// 2) Initialize memory store
-if (!staticData.chatMemory) staticData.chatMemory = {};
-if (!staticData.chatMemory[sessionId]) staticData.chatMemory[sessionId] = [];
-
-// 3) Append user message
-staticData.chatMemory[sessionId].push({ role: 'user', content: userMessage });
-
-// 4) Keep last N messages (tune later)
-staticData.chatMemory[sessionId] = staticData.chatMemory[sessionId].slice(-12);
-
-// 5) Build prompt text that includes history
-const historyText = staticData.chatMemory[sessionId]
-  .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-  .join('\n');
-
-return [{
-  session_id: sessionId,
-  user_message: userMessage,
-  chat_history: staticData.chatMemory[sessionId],
-  prompt_for_llm: `You are a corporate finance assistant.
-Use the conversation history to answer the latest question.
-If information is missing, ask a clarifying question.
-
-Conversation history:
-${historyText}
-
-Latest user message:
-${userMessage}
-`
-}];
-```
-
-### 2) Update **Basic LLM Chain** prompt source
-
-In your Basic LLM Chain:
-
-* **Source for prompt:** choose **Defined below**
-* In the prompt box, use this expression:
-
-`{{$json.prompt_for_llm}}`
-
-(So the chain uses the history-aware prompt we generated.)
-
-### 3) Add ONE more small step to store the assistant reply (optional but recommended)
-
-If you want the assistant’s replies also in memory, you need to append them after the chain.
-That means either:
-
-* add another Function node after Basic LLM Chain, OR
-* store it in Respond node (not ideal)
-
-If you truly want to keep nodes minimal, skip it for now — memory will be “user-only,” which is still useful.
-
-But best practice is one more Function node after the chain.
-
----
-
-# Option 2: Use “Chat Model” node directly
-
-This changes nothing regarding memory. It will still only reply once per request.
-**Chat Model ≠ conversation loop.** It’s just the model call.
-
-So: switching to Chat Model won’t solve your issue. You still need memory storage.
-
----
-
-# Key point you must accept
-
-n8n chat is always:
-**message → run → reply → end**
-
-“Keep going until solved” is achieved by:
-
-* persistent memory per `sessionId`
-* and the assistant ending with a question like:
-  **“What’s the timeframe/report name?”**
-
-Not by looping the workflow.
-
----
-
-# What I need from you (so this works first try)
-
-In the Chat Trigger output (right panel), what are the field names you see for:
-
-* the user’s message: `message` or `text`?
-* the session id: `chatId` or `conversationId`?
-
-Just tell me the two keys, like:
-
-* “message key = text, session key = chatId”
-
-Then I’ll adjust the memory function to match your exact payload so you don’t waste time.
+{
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "responseNodes"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1168,
+        208
+      ],
+      "id": "6da7e1f7-50f4-47f6-885b-54668878829c",
+      "name": "When chat message received",
+      "webhookId": "d926501e-4322-44b1-97a4-0b460850e88c"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are an intelligent automation assistant for corporate finance department. \n\n\n\nYour job is to help users generate executive ready insights and next actions rules. \n\n\n\nYou must follow:\n1.- If the user is missing the report name or time frame ask verifying questions BEFORE answering. \n\n2.- Do not invent numbers if data is missing ask for it or say what do you need? \"\n\n3.- Always reply in the structure \n- answers (bulletized) \n- What I still need (if anything). \n- next question \n\nIf user says \"Hello\" or vague input, ask what report + timeframe they help with."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -896,
+        208
+      ],
+      "id": "7ae53f59-708f-454b-9f29-978426f215f3",
+      "name": "AI Agent",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "projectId": {
+          "__rl": true,
+          "value": "vz-nonit-np-jaov-dev-fpasdo-0",
+          "mode": "list",
+          "cachedResultName": "vz-nonit-np-jaov-dev-fpasdo-0"
+        },
+        "options": {
+          "maxOutputTokens": 800,
+          "temperature": 0.2
+        }
+      },
+      "type": "CUSTOM.lmChatGoogleVertexWIF",
+      "typeVersion": 1,
+      "position": [
+        -944,
+        432
+      ],
+      "id": "15cf68b9-1df5-4ed7-a32d-0a88590805c6",
+      "name": "Google Vertex AI Chat Model with WIF",
+      "credentials": {
+        "googleWIFApi": {
+          "id": "lRbLPJ3RiQvS6bmh",
+          "name": "JAOV Service Account WIF(VertexAI)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -784,
+        432
+      ],
+      "id": "8b5615c9-220f-4178-b505-e0e3b83f96be",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "description": "Returns the list supported reports and what information is needed.",
+        "jsCode": "return {\n  supported_reports: [\"CIPB\",\"OneEx Report\",\"CFO KPI\", \"Daily Device\"],\n  required_inputs: [\"input_name\",\"timeframe\"]\n  exaples: [\n  \"Summarize what changed in oneex report for 2025-12 vs 2025-11\",\n  \"Draft CIPB executive summary for Nov 2025 month-end\"\n  ]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        -608,
+        432
+      ],
+      "id": "c12ac88f-d7eb-4041-9e52-ba44ccead9df",
+      "name": "get_supported_reports"
+    },
+    {
+      "parameters": {
+        "message": "={{ $json.output }}",
+        "waitUserReply": false,
+        "options": {
+          "memoryConnection": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        208
+      ],
+      "id": "5d4e34a6-817c-4aaf-9f0f-f442c53b4be1",
+      "name": "Respond to Chat"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vertex AI Chat Model with WIF": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_supported_reports": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "47afbff3c3bd6cef1b07f625cd9e35241695ee198c9627afe8af9849f53cba16"
+  }
+}
