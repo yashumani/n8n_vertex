@@ -1,0 +1,695 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {
+          "loadPreviousSession": "memory",
+          "responseMode": "responseNodes"
+        }
+      },
+      "id": "dc49f611-4448-437f-b25f-503ac70977d6",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -832,
+        816
+      ],
+      "webhookId": "9b3e203a-3f44-45a0-8384-93d0cdb8a29e"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "ea5cc49b-1039-4b12-9845-7de7f2c475fe",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -512,
+        1104
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "Wj4x6WwLxBdxoGVh",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "0f5778be-7478-42fc-84e9-25f6cb87d3b0",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -760,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "message": "={{ $json.output }}",
+        "waitUserReply": false,
+        "options": {
+          "memoryConnection": false
+        }
+      },
+      "id": "062fa672-6aa6-4233-8959-01c42b2ff9af",
+      "name": "Respond to Chat",
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        828
+      ]
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the intake assistant for Verizon Corporate Finance IA Layer.\n\nYour job: Extract structured information from the user message.\n\nOutput a JSON object with:\n- intent: what the user wants (summarize/analyze/create doc/send email)\n- report_name: which report (CIPB, OneEx Report, CFO KPI, Daily Device)\n- timeframe: period requested (week 52 vs 51, Nov 2025, etc.)\n- metrics_requested: array of specific metrics mentioned\n- clarifying_questions: array of questions if critical info is missing\n- handoff_to_orchestrator: \"Yes\" if you have enough info, \"No\" if missing report or timeframe\n\nIf report_name OR timeframe is missing, set handoff_to_orchestrator to \"No\" and provide clarifying_questions.\n\nDo NOT call tools. Only extract and structure information."
+        }
+      },
+      "id": "3df2e5d1-9161-4897-afa0-c15d5f23a9bc",
+      "name": "Conversational Agent (Intake)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -480,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"intent\":{\"type\":\"string\"},\"report_name\":{\"type\":\"string\"},\"timeframe\":{\"type\":\"string\"},\"metrics_requested\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"clarifying_questions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"handoff_to_orchestrator\":{\"type\":\"string\",\"enum\":[\"Yes\",\"No\"]}},\"required\":[\"intent\",\"handoff_to_orchestrator\"]}"
+      },
+      "id": "04190298-61c5-41fe-a180-e93f8d7641da",
+      "name": "Intake JSON Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -344,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.output.handoff_to_orchestrator }}",
+              "rightValue": "No",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bdbcc55a-3803-42a3-b4a9-be35090f8892",
+      "name": "Clarification Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -128,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "output",
+              "value": "={{ $json.output.clarifying_questions.join(\"\\n\\n\") }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "4f30e803-7a4f-487f-bc6b-400bf099683f",
+      "name": "Format Clarifying Questions",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Intake data: {{ JSON.stringify($json.output) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the orchestrator planner for Verizon Corporate Finance IA Layer.\n\nYour job: Create a deterministic execution plan based on the intake data.\n\nOutput a JSON object with:\n- plan: array of steps, each with {tool: \"tool_name\", args: {param: value}}\n- stop_reason: string explaining why you cannot plan (only if missing critical info)\n\nAvailable tools:\n- get_report_metadata: args {report_name}\n- run_bigquery: args {sql, params}\n- dq_validate_insights: args {insights}\n\nTypical plan for \"summarize what changed\":\n1. {tool: \"get_report_metadata\", args: {report_name: \"OneEx Report\"}}\n2. {tool: \"run_bigquery\", args: {sql: \"SELECT * FROM report WHERE week=52\", params: {}}}\n\nIf you cannot create a safe plan (e.g., timeframe unclear), set stop_reason and leave plan empty.\n\nDo NOT call tools. Only output the plan as JSON."
+        }
+      },
+      "id": "3e26a8a2-36af-4a12-a5fb-0a6e7305ca5c",
+      "name": "Orchestrator Agent (Planner)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        96,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"plan\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"tool\":{\"type\":\"string\"},\"args\":{\"type\":\"object\"}},\"required\":[\"tool\",\"args\"]}},\"stop_reason\":{\"type\":\"string\"}},\"required\":[\"plan\"]}"
+      },
+      "id": "2c231732-89a5-46b9-8b83-a9ca76b652fc",
+      "name": "Plan JSON Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        168,
+        1164
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.output.stop_reason }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7280bf3b-ab37-4230-97f9-b275165b4df7",
+      "name": "Plan Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "output",
+              "value": "={{ $json.output.stop_reason }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "2f592671-334d-4c06-bf52-7a28036cdd7a",
+      "name": "Format Stop Reason",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        828
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $input.first().json.output.plan;\nreturn plan.map(step => ({ json: step }));"
+      },
+      "id": "6d38017f-23a9-4284-a5b4-8558548daf2b",
+      "name": "Convert Plan to Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "ef2967da-dd24-4c8f-9aa6-f5d0cc2c6218",
+      "name": "Loop Over Plan Steps",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        896,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tool }}",
+                    "rightValue": "get_report_metadata",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get_report_metadata"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tool }}",
+                    "rightValue": "run_bigquery",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "run_bigquery"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tool }}",
+                    "rightValue": "dq_validate_insights",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "dq_validate_insights"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Unknown Tool"
+        }
+      },
+      "id": "f3573d7a-8465-421f-ab83-9a7f8df7a0e9",
+      "name": "Tool Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        1164
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const report = $input.first().json.args.report_name || \"unknown\";\nconst registry = {\n  \"CIPB\": { owner: \"BI Team\", cadence: \"weekly/bi-weekly\", key_metrics: [\"Visitor\", \"Interaction\", \"Conversion\"], notes: \"Exec narrative needed.\" },\n  \"OneEx Report\": { owner: \"FPAS\", cadence: \"weekly\", key_metrics: [\"Visitor\", \"Interaction\"], notes: \"Focus on what changed.\" },\n  \"CFO KPI\": { owner: \"Finance\", cadence: \"weekly\", key_metrics: [\"Revenue\", \"OFS\", \"FWA\", \"Gross Adds\"], notes: \"High accuracy required.\" }\n};\nreturn [{ json: { status: \"ok\", tool: \"get_report_metadata\", data: registry[report] || { owner: \"unknown\" } } }];"
+      },
+      "id": "5f785a0f-4531-4dcf-a27b-557042b495d3",
+      "name": "Tool: get_report_metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1276
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sql = $input.first().json.args.sql || \"SELECT 1\";\nconst params = $input.first().json.args.params || {};\n// Stubbed response - replace with real BigQuery call later\nreturn [{ json: { status: \"ok\", tool: \"run_bigquery\", data: { rowCount: 0, rows: [], sql, params, note: \"Stubbed response\" } } }];"
+      },
+      "id": "3b764cba-7e13-4092-afb3-7c06a7bfda36",
+      "name": "Tool: run_bigquery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1084
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const insights = $input.first().json.args.insights || \"\";\nconst checks = {\n  has_numbers: /\\d/.test(insights),\n  has_evidence: insights.toLowerCase().includes(\"evidence\") || insights.toLowerCase().includes(\"source\"),\n  length_ok: insights.length > 50\n};\nconst passed = Object.values(checks).every(v => v === true);\nreturn [{ json: { status: \"ok\", tool: \"dq_validate_insights\", data: { validation_passed: passed, checks } } }];"
+      },
+      "id": "0f17b64a-f7d8-4a09-957d-8228526815d0",
+      "name": "Tool: dq_validate_insights",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1468
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get or initialize accumulator from workflow static data\nconst acc = $getWorkflowStaticData(\"node\").accumulator || { tools_called: [], results: {} };\n\n// Add current tool result\nconst toolResult = $input.first().json;\nacc.tools_called.push(toolResult.tool);\nacc.results[toolResult.tool] = toolResult.data;\n\n// Save back to static data\n$getWorkflowStaticData(\"node\").accumulator = acc;\n\nreturn [{ json: acc }];"
+      },
+      "id": "bc774a14-c2c4-4366-b887-ab56c41abc7a",
+      "name": "Accumulator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1324
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get accumulated results\nconst acc = $getWorkflowStaticData(\"node\").accumulator || { tools_called: [], results: {} };\n\n// Build executive response\nconst output = {\n  answer: [\n    \"Executive Summary:\",\n    \"- Analysis complete based on available data\",\n    \"- Key metrics reviewed\"\n  ].join(\"\\n\"),\n  evidence: `Tools used: ${acc.tools_called.join(\", \")}`,\n  assumptions: \"Stubbed data used for demonstration\",\n  next_question: \"Would you like me to create a document or send this via email?\",\n  receipt: {\n    tools_called: acc.tools_called,\n    results_summary: Object.keys(acc.results).map(tool => `${tool}: ${JSON.stringify(acc.results[tool]).substring(0, 100)}...`)\n  }\n};\n\n// Clear accumulator for next execution\n$getWorkflowStaticData(\"node\").accumulator = null;\n\nreturn [{ json: { output: JSON.stringify(output, null, 2) } }];"
+      },
+      "id": "f159271d-8d70-4694-8d43-8c397958cd31",
+      "name": "Transformer (Build Receipt)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        1516
+      ]
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Conversational Agent (Intake)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Conversational Agent (Intake)",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Orchestrator Agent (Planner)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "When chat message received",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Conversational Agent (Intake)",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Orchestrator Agent (Planner)",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversational Agent (Intake)": {
+      "main": [
+        [
+          {
+            "node": "Clarification Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intake JSON Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Conversational Agent (Intake)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clarification Gate": {
+      "main": [
+        [
+          {
+            "node": "Format Clarifying Questions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Orchestrator Agent (Planner)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Clarifying Questions": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator Agent (Planner)": {
+      "main": [
+        [
+          {
+            "node": "Plan Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan JSON Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Orchestrator Agent (Planner)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Gate": {
+      "main": [
+        [
+          {
+            "node": "Format Stop Reason",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Convert Plan to Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Stop Reason": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Plan to Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Plan Steps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Plan Steps": {
+      "main": [
+        [
+          {
+            "node": "Tool Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transformer (Build Receipt)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool Router": {
+      "main": [
+        [
+          {
+            "node": "Tool: get_report_metadata",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tool: run_bigquery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tool: dq_validate_insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: get_report_metadata": {
+      "main": [
+        [
+          {
+            "node": "Accumulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: run_bigquery": {
+      "main": [
+        [
+          {
+            "node": "Accumulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: dq_validate_insights": {
+      "main": [
+        [
+          {
+            "node": "Accumulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accumulator": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Plan Steps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transformer (Build Receipt)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8efc26d7d63dddf668f8794b8d058b0d12f1f6a90e74c9195a88e2a406849660"
+  }
+}
