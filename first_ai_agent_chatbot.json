@@ -2,61 +2,59 @@
   "nodes": [
     {
       "parameters": {
+        "public": true,
         "options": {
+          "loadPreviousSession": "memory",
           "responseMode": "responseNodes"
         }
       },
+      "id": "dc49f611-4448-437f-b25f-503ac70977d6",
+      "name": "When chat message received",
       "type": "@n8n/n8n-nodes-langchain.chatTrigger",
       "typeVersion": 1.4,
       "position": [
-        -1168,
-        208
+        448,
+        560
       ],
-      "id": "6da7e1f7-50f4-47f6-885b-54668878829c",
-      "name": "When chat message received",
-      "webhookId": "d926501e-4322-44b1-97a4-0b460850e88c"
+      "webhookId": "9b3e203a-3f44-45a0-8384-93d0cdb8a29e"
     },
     {
       "parameters": {
         "options": {
-          "systemMessage": "You are an intelligent automation assistant for corporate finance department. \n\n\n\nYour job is to help users generate executive ready insights and next actions rules. \n\n\n\nYou must follow:\n1.- If the user is missing the report name or time frame ask verifying questions BEFORE answering. \n\n2.- Do not invent numbers if data is missing ask for it or say what do you need? \"\n\n3.- Always reply in the structure \n- answers (bulletized) \n- What I still need (if anything). \n- next question \n\nIf user says \"Hello\" or vague input, ask what report + timeframe they help with."
+          "systemMessage": "SYSTEM\nYou are the Intelligent Automation (IA) assistant for Verizon Corporate Finance reporting.\n\nYour job:\n\n- generate executive-ready insights (what changed / why / so-what / actions)\n- create deliverables (Doc/Slides) and distribute (email) using tools.\n\nHard rules:\n\n1. If missing report name OR timeframe, ask clarifying questions BEFORE any analysis.\n2. Do NOT invent numbers. If metrics are required, you MUST call run_bigquery or ask for data.\n3. Always output in this structure:\n\n- Answer (bullets)\n- Evidence (what tools/data you used)\n- Next action / Next question\n\n4. Use tools whenever possible instead of guessing.\n5. If the user asks for a doc/slides/email, you MUST publish via tools and return links.\n\nInternal plan guidance (call tools in this order when needed):\n- get_report_metadata\n- run_bigquery\n- dq_validate_insights\n- publish_google_doc or publish_google_slides\n- send_email"
         }
       },
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3,
-      "position": [
-        -896,
-        208
-      ],
-      "id": "7ae53f59-708f-454b-9f29-978426f215f3",
+      "id": "3278ab26-9ff9-4420-8066-ac5a21bf652b",
       "name": "AI Agent",
-      "retryOnFail": true
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1176,
+        560
+      ]
     },
     {
       "parameters": {
-        "projectId": {
+        "model": {
           "__rl": true,
-          "value": "vz-nonit-np-jaov-dev-fpasdo-0",
-          "mode": "list",
-          "cachedResultName": "vz-nonit-np-jaov-dev-fpasdo-0"
+          "mode": "id",
+          "value": "gpt-4o-mini"
         },
-        "options": {
-          "maxOutputTokens": 800,
-          "temperature": 0.2
-        }
+        "builtInTools": {},
+        "options": {}
       },
-      "type": "CUSTOM.lmChatGoogleVertexWIF",
-      "typeVersion": 1,
+      "id": "ea5cc49b-1039-4b12-9845-7de7f2c475fe",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
       "position": [
-        -944,
-        432
+        800,
+        784
       ],
-      "id": "15cf68b9-1df5-4ed7-a32d-0a88590805c6",
-      "name": "Google Vertex AI Chat Model with WIF",
       "credentials": {
-        "googleWIFApi": {
-          "id": "lRbLPJ3RiQvS6bmh",
-          "name": "JAOV Service Account WIF(VertexAI)"
+        "openAiApi": {
+          "id": "Wj4x6WwLxBdxoGVh",
+          "name": "n8n free OpenAI API credits"
         }
       }
     },
@@ -64,28 +62,14 @@
       "parameters": {
         "contextWindowLength": 10
       },
+      "id": "0f5778be-7478-42fc-84e9-25f6cb87d3b0",
+      "name": "Simple Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        -784,
-        432
-      ],
-      "id": "8b5615c9-220f-4178-b505-e0e3b83f96be",
-      "name": "Simple Memory"
-    },
-    {
-      "parameters": {
-        "description": "Returns the list supported reports and what information is needed.",
-        "jsCode": "return {\n  supported_reports: [\"CIPB\",\"OneEx Report\",\"CFO KPI\", \"Daily Device\"],\n  required_inputs: [\"input_name\",\"timeframe\"]\n  exaples: [\n  \"Summarize what changed in oneex report for 2025-12 vs 2025-11\",\n  \"Draft CIPB executive summary for Nov 2025 month-end\"\n  ]\n}\n"
-      },
-      "type": "@n8n/n8n-nodes-langchain.toolCode",
-      "typeVersion": 1.3,
-      "position": [
-        -608,
-        432
-      ],
-      "id": "c12ac88f-d7eb-4041-9e52-ba44ccead9df",
-      "name": "get_supported_reports"
+        520,
+        784
+      ]
     },
     {
       "parameters": {
@@ -95,14 +79,118 @@
           "memoryConnection": false
         }
       },
+      "id": "062fa672-6aa6-4233-8959-01c42b2ff9af",
+      "name": "Respond to Chat",
       "type": "@n8n/n8n-nodes-langchain.chat",
       "typeVersion": 1,
       "position": [
-        -480,
-        208
+        1904,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Lists supported reports, inputs, and examples.",
+        "jsCode": "return {\n  supported_reports: [\"CIPB\", \"OneEx Report\", \"CFO KPI\", \"Daily Device\"],\n  required_inputs: [\"report_name\", \"timeframe\"],\n  examples: [\n    \"Summarize what changed in OneEx Report for 2025-12 vs 2025-11\",\n    \"Draft CIPB executive summary for Nov 2025 month-end\"\n  ]\n}"
+      },
+      "id": "092511a1-a901-484d-be46-8b658194a20d",
+      "name": "get_supported_reports",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Returns report owner, cadence, key metrics, and notes. Requires report_name parameter.",
+        "jsCode": "const report = ($fromAI(\"report_name\", \"Name of the report to get metadata for\", \"string\", \"unknown\"));\nconst registry = {\n  \"CIPB\": { owner: \"BI Team\", cadence: \"weekly/bi-weekly\", key_metrics: [\"Visitor\", \"Interaction\", \"Conversion\"], notes: \"Exec narrative needed. Avoid metric re-definitions.\" },\n  \"OneEx Report\": { owner: \"FPAS\", cadence: \"weekly\", key_metrics: [\"Visitor\", \"Interaction\"], notes: \"Focus on what changed; keep it short.\" },\n  \"CFO KPI\": { owner: \"Finance\", cadence: \"weekly\", key_metrics: [\"Revenue\", \"OFS\", \"FWA\", \"Gross Adds\"], notes: \"High accuracy required.\" }\n};\nreturn { report_name: report, metadata: registry[report] || { owner: \"unknown\", key_metrics: [], notes: \"Unknown report. Ask user.\" } };"
+      },
+      "id": "4ff43fb6-813e-425b-8e7b-0dbf1dc028ee",
+      "name": "get_report_metadata",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1056,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Validates data quality of insights. Requires insights parameter (text or JSON).",
+        "jsCode": "const insights = $fromAI(\"insights\", \"The insights to validate\", \"string\", \"\");\nconst checks = {\n  has_numbers: /\\d/.test(insights),\n  has_evidence: insights.toLowerCase().includes(\"evidence\") || insights.toLowerCase().includes(\"source\"),\n  length_ok: insights.length > 50\n};\nconst passed = Object.values(checks).every(v => v === true);\nreturn { validation_passed: passed, checks, notes: passed ? \"Quality checks passed\" : \"Missing numbers, evidence, or too short\" };"
+      },
+      "id": "3c425e22-01dc-4f01-8d14-dcc7d55d807c",
+      "name": "dq_validate_insights",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1184,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "projectId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<__PLACEHOLDER_VALUE__Google Cloud Project ID__>"
+        },
+        "sqlQuery": "={{ $fromAI(\"sql\", \"SQL query to execute in BigQuery\", \"string\") }}",
+        "options": {}
+      },
+      "id": "6d20b9ed-ba72-42b4-9a74-4b86f61e1298",
+      "name": "run_bigquery",
+      "type": "n8n-nodes-base.googleBigQueryTool",
+      "typeVersion": 2.1,
+      "position": [
+        1312,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "title": "={{ $fromAI(\"doc_title\", \"Title for the Google Doc\", \"string\") }}"
+      },
+      "id": "2698f299-224c-47d7-90ab-4b1af147ee9a",
+      "name": "publish_google_doc",
+      "type": "n8n-nodes-base.googleDocsTool",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "title": "={{ $fromAI(\"slides_title\", \"Title for the Google Slides presentation\", \"string\") }}"
+      },
+      "id": "c57197dc-ed88-4255-b7db-2b37ab45b83b",
+      "name": "publish_google_slides",
+      "type": "n8n-nodes-base.googleSlidesTool",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $fromAI('to', 'Email recipient address', 'string') }}",
+        "subject": "={{ $fromAI('subject', 'Email subject line', 'string') }}",
+        "message": "={{ $fromAI('message_html', 'Email message content (HTML supported)', 'string') }}",
+        "options": {}
+      },
+      "id": "a62abb74-700c-49e9-97fe-cd1aec817df6",
+      "name": "send_email",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        784
       ],
-      "id": "5d4e34a6-817c-4aaf-9f0f-f442c53b4be1",
-      "name": "Respond to Chat"
+      "webhookId": "95daf7fd-a3e3-4e7f-b6e9-9df7d3dd525e"
     }
   ],
   "connections": {
@@ -128,7 +216,7 @@
         ]
       ]
     },
-    "Google Vertex AI Chat Model with WIF": {
+    "OpenAI Chat Model": {
       "ai_languageModel": [
         [
           {
@@ -146,6 +234,11 @@
             "node": "AI Agent",
             "type": "ai_memory",
             "index": 0
+          },
+          {
+            "node": "When chat message received",
+            "type": "ai_memory",
+            "index": 0
           }
         ]
       ]
@@ -160,11 +253,76 @@
           }
         ]
       ]
+    },
+    "get_report_metadata": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "dq_validate_insights": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "run_bigquery": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "publish_google_doc": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "publish_google_slides": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_email": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "47afbff3c3bd6cef1b07f625cd9e35241695ee198c9627afe8af9849f53cba16"
+    "instanceId": "8efc26d7d63dddf668f8794b8d058b0d12f1f6a90e74c9195a88e2a406849660"
   }
 }
